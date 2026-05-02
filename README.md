@@ -1,0 +1,1 @@
+My project is a simulation where people are introduced into a world to live and eventually die, either from natural causes or from monsters inhabiting the level. Current goals include improving the levels, refining the monsters unique to each level, and adding new monster types to the environment.
