@@ -1,0 +1,119 @@
+from sklearn.datasets import load_wine
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, classification_report
+import torch
+import torch.nn as nn
+import torch.optim
+from torch.utils.data import TensorDataset, DataLoader
+import optim
+
+# First we are preparing and preprocessing data for train and test subjects
+
+data= load_wine()
+X, Y= load_wine(return_X_y=True) # we are loading to train the X and Y datasets
+
+# Now, in order to not overfit our neural network, we split the data in 80 to 20 proportion
+X_train, X_test, Y_train, Y_test=train_test_split(X, Y, test_size=0.2, random_state=42, stratify=Y)
+
+# We have packed the X train,test as well as for the Y, we need to scale them right now
+scaler=StandardScaler() # measurement tool, need also
+
+# packing up for the scaled data
+X_train_scaled=scaler.fit_transform(X_train)
+X_test_scaled=scaler.transform(X_test)
+
+# Ok, now we need to make them into tensors the X and Y's
+
+X_train_tensor=torch.tensor(X_train_scaled, dtype=torch.float32)
+X_test_tensor=torch.tensor(X_test_scaled, dtype=torch.float32)
+
+Y_train_tensor=torch.tensor(Y_train, dtype=torch.long)
+Y_test_tensor=torch.tensor(Y_test, dtype=torch.long)
+
+# Now we are paking into the training dataset
+train_dataset=TensorDataset(X_train_tensor, Y_train_tensor) 
+test_dataset=TensorDataset(X_test_tensor, Y_test_tensor)
+
+# after packing them, we are loading the dataset
+
+train_loader=DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader=DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+# Now, everything is build up, we just need to demonstrate the characteristics now so
+# we can be sure our training and test loader works fine
+
+print("DataLoader: ")
+print(f"Batch size of training set: {len(train_loader)}")
+print(f"Batch size of test set: {len(test_loader)}")
+
+for Batch_X, Batch_Y in train_loader:
+    print(f"\nFirst Batch X Shape: {Batch_X.shape}") # [32, 30] -> 32 patients, 30 features
+    print(f"First Batch y Shape: {Batch_Y.shape}") # [32, 1]  -> 32 labels
+    break
+
+
+# Ok, finally we have came for the biggest thing here... the AI brain!
+
+class Wine_Classifier(nn.Module):
+    def __init__(self, input_dim, num_class):
+        super(Wine_Classifier, self).__init__()
+
+        self.neural_net=nn.Sequential(
+            nn.Linear(input_dim, 30), # input dim to 13 hidden neurons of layer_1
+            nn.ReLU(), # activation function
+            nn.Linear(30, 15), # from 30 neurons process to layer 2 15 neurons 
+            nn.ReLU(), # activation fucntion
+            nn.Linear(15, num_class) # the output layer is 1 neuron
+        )
+
+    def forward(self, x):
+        return self.neural_net(x)
+
+wine_model=Wine_Classifier(input_dim=13, num_class=3) # to have three outputs
+
+# Ok, we have built the brain, now we need to make the learning loop
+
+criterion=nn.CrossEntropyLoss() # calculates the error
+optimizer= torch.optim.Adam(wine_model.parameters(), lr=0.01)
+
+epochs=50
+print("Begin the learning process...")
+
+for epoch in range(1, epochs+1):
+    wine_model.train()
+    running_loss=0.0
+
+    for batch_X, batch_Y in train_loader:
+        optimizer.zero_grad() # reset the old gradients
+        outputs=wine_model(batch_X) # Forward pass the output shape
+        loss=criterion(outputs, batch_Y) # Calculate the loss
+        loss.backward() # Backpropagation
+        optimizer.step() # update the weights
+
+        running_loss+=loss.item()
+
+    if epoch%5==0:
+        avg_loss = running_loss / len(train_loader)
+        print(f"Epoch [{epoch:02d}/{epochs}] - Loss: {avg_loss:.4f}")
+
+# The final step, the evaluation of predictions
+
+wine_model.eval()
+all_preds=[]
+all_targets=[]
+
+with torch.no_grad():
+    for batch_X, batch_Y in test_loader:
+        logits= wine_model(batch_X) 
+        # Select the class index (0, 1, or 2) with highest predicted score
+        preds = torch.argmax(logits, dim=1)
+        
+        all_preds.extend(preds.cpu().numpy())
+        all_targets.extend(batch_Y.cpu().numpy())
+
+print("\n" + "=" * 40)
+print(f"=== TEST ACCURACY: {accuracy_score(all_targets, all_preds) * 100:.2f}% ===")
+print("=" * 40)
+print("\nClassification Report:")
+print(classification_report(all_targets, all_preds, target_names=['Class 0', 'Class 1', 'Class 2']))
